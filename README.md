@@ -6,7 +6,6 @@
 - Roll Number: 24BQ5A6110
 - GitHub: https://github.com/Kavya-marri
 
----
 
 ## Project Structure
 
