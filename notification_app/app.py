@@ -15,7 +15,6 @@ def home():
 
 @app.route("/notifications", methods=["POST"])
 def send_notification():
-
     data = request.json
 
     notification = {
@@ -29,10 +28,7 @@ def send_notification():
 
     notifications.append(notification)
 
-    return jsonify({
-        "message": "Notification Sent",
-        "notification": notification
-    }), 201
+    return jsonify(notification), 201
 
 
 @app.route("/notifications", methods=["GET"])
@@ -40,16 +36,13 @@ def get_notifications():
     return jsonify(notifications)
 
 
-@app.route("/notifications/<int:id>", methods=["GET"])
-def get_notification(id):
-
+@app.route("/notifications/<int:notification_id>", methods=["GET"])
+def get_notification(notification_id):
     for notification in notifications:
-        if notification["id"] == id:
+        if notification["id"] == notification_id:
             return jsonify(notification)
 
-    return jsonify({
-        "error": "Notification not found"
-    }), 404
+    return jsonify({"error": "Notification not found"}), 404
 
 
 if __name__ == "__main__":
