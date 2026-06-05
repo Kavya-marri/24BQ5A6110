@@ -1,113 +1,6 @@
-# Notification System Design
+# Campus Notifications Microservice Design
 
-## 1. Objective
-
-Design a scalable notification system capable of sending notifications through multiple channels such as Email, SMS, and Push Notifications. The system should support millions of users while ensuring reliability, fault tolerance, and high availability.
-
----
-
-## 2. Functional Requirements
-
-* Send notifications through Email, SMS, and Push channels.
-* Support single-user and bulk notifications.
-* Allow scheduling notifications.
-* Track notification status (Pending, Sent, Failed).
-* Retry failed notifications.
-* Maintain notification history.
-
----
-
-## 3. Non-Functional Requirements
-
-* High Availability
-* Scalability
-* Reliability
-* Fault Tolerance
-* Low Latency
-* Security
-
----
-
-## 4. High-Level Architecture
-
-Client Applications send notification requests to the Notification API.
-
-The Notification API validates requests and stores them in the database.
-
-Messages are placed into a Queue.
-
-Notification Workers consume messages from the Queue and send notifications using the appropriate channel provider.
-
-Status updates are stored in the Notification Database.
-
----
-
-## 5. Components
-
-### API Gateway
-
-* Receives notification requests.
-* Handles authentication and rate limiting.
-
-### Notification Service
-
-* Validates requests.
-* Routes notifications to the correct channel.
-
-### Message Queue
-
-Examples:
-
-* RabbitMQ
-* Apache Kafka
-* AWS SQS
-
-Purpose:
-
-* Decouples request handling from delivery.
-* Supports high throughput.
-
-### Worker Service
-
-* Consumes messages from the queue.
-* Sends notifications through providers.
-
-### Database
-
-Stores:
-
-* User information
-* Notification records
-* Delivery status
-* Retry information
-
----
-
-## 6. Database Design
-
-### Users Table
-
-| Field   | Type    |
-| ------- | ------- |
-| user_id | UUID    |
-| name    | VARCHAR |
-| email   | VARCHAR |
-| phone   | VARCHAR |
-
-### Notifications Table
-
-| Field           | Type      |
-| --------------- | --------- |
-| notification_id | UUID      |
-| user_id         | UUID      |
-| channel         | VARCHAR   |
-| message         | TEXT      |
-| status          | VARCHAR   |
-| created_at      | TIMESTAMP |
-
----
-
-## 7. API Design
+## Stage 1: API Design
 
 ### Send Notification
 
@@ -115,59 +8,249 @@ POST /notifications
 
 Request:
 
+```json
 {
-"userId": "123",
-"channel": "email",
-"message": "Vehicle maintenance scheduled"
+  "studentId": 1042,
+  "type": "Placement",
+  "message": "TCS Recruitment Drive",
+  "priority": "High"
 }
+```
 
 Response:
 
+```json
 {
-"status": "queued"
+  "status": "success",
+  "notificationId": "N1001"
 }
+```
 
-### Get Notification Status
+### Fetch Notifications
 
-GET /notifications/{id}
+GET /notifications/{studentId}
 
 Response:
 
-{
-"notificationId": "123",
-"status": "sent"
-}
+```json
+[
+  {
+    "notificationId": "N1001",
+    "type": "Placement",
+    "message": "TCS Recruitment Drive",
+    "isRead": false
+  }
+]
+```
+
+### Real-Time Delivery
+
+* WebSockets for instant updates
+* Fallback to polling
+* Push notifications for mobile devices
 
 ---
 
-## 8. Scalability
+## Stage 2: Database Design
 
-* Horizontal scaling of API servers.
-* Multiple worker instances.
-* Queue-based asynchronous processing.
-* Database indexing and partitioning.
+### Choice
+
+SQL Database (PostgreSQL)
+
+Reason:
+
+* Structured data
+* ACID compliance
+* Efficient indexing
+
+### Tables
+
+#### Students
+
+| Column    | Type    |
+| --------- | ------- |
+| studentId | INT     |
+| name      | VARCHAR |
+| email     | VARCHAR |
+
+#### Notifications
+
+| Column         | Type      |
+| -------------- | --------- |
+| notificationId | UUID      |
+| studentId      | INT       |
+| type           | VARCHAR   |
+| message        | TEXT      |
+| isRead         | BOOLEAN   |
+| createdAt      | TIMESTAMP |
+
+### Scaling
+
+* Read replicas
+* Table partitioning
+* Connection pooling
 
 ---
 
-## 9. Fault Tolerance
+## Stage 3: Query Optimization
 
-* Retry failed notifications.
-* Dead Letter Queue (DLQ) for permanently failed messages.
-* Redundant worker instances.
-* Health monitoring and alerting.
+### Original Query
+
+```sql
+SELECT * FROM notifications
+WHERE studentID = 1042
+AND isRead = false
+ORDER BY createdAt DESC;
+```
+
+### Problem
+
+Without indexes:
+
+* Full table scan
+* Slow sorting
+* High latency
+
+### Solution
+
+```sql
+CREATE INDEX idx_student_read_created
+ON notifications(studentID,isRead,createdAt DESC);
+```
+
+### Placement Notifications in Last 7 Days
+
+```sql
+SELECT *
+FROM notifications
+WHERE type='Placement'
+AND createdAt >= NOW() - INTERVAL '7 days';
+```
 
 ---
 
-## 10. Security
+## Stage 4: Performance Improvements
 
-* HTTPS communication.
-* Authentication and Authorization.
-* Data encryption.
-* Secure storage of credentials.
-* Rate limiting to prevent abuse.
+### Issues
+
+* Large notification volume
+* Repeated database hits
+* Slow loading
+
+### Improvements
+
+#### Caching
+
+Use Redis
+
+Benefits:
+
+* Faster reads
+* Reduced database load
+
+#### Pagination
+
+```http
+GET /notifications?page=1&limit=20
+```
+
+#### Real-Time Updates
+
+* WebSockets
+* Server-Sent Events (SSE)
 
 ---
 
-## 11. Conclusion
+## Stage 5: Notify All Redesign
 
-The proposed notification system provides a scalable, reliable, and fault-tolerant architecture capable of handling large volumes of notifications while supporting multiple delivery channels and ensuring high availability.
+### Problems
+
+Current approach:
+
+```text
+Loop through every student
+Send notification synchronously
+```
+
+Issues:
+
+* Slow execution
+* Failure stops processing
+* Not scalable
+
+### Improved Design
+
+1. API receives request
+2. Store notification job
+3. Push message to Queue
+4. Worker services process queue
+5. Retry failed messages
+
+### Queue Options
+
+* RabbitMQ
+* Kafka
+* AWS SQS
+
+### Benefits
+
+* High throughput
+* Fault tolerance
+* Horizontal scaling
+
+---
+
+## Stage 6: Priority Inbox
+
+### Priority Rules
+
+| Type      | Score |
+| --------- | ----- |
+| Placement | 100   |
+| Result    | 80    |
+| Event     | 50    |
+| General   | 20    |
+
+### Algorithm
+
+1. Fetch notifications
+2. Assign score
+3. Sort by score
+4. Return Top 10
+
+### Sample Output
+
+```json
+[
+  {
+    "type":"Placement",
+    "message":"Amazon Hiring Drive",
+    "priority":100
+  },
+  {
+    "type":"Result",
+    "message":"Semester Results Published",
+    "priority":80
+  }
+]
+```
+
+### Complexity
+
+Sorting:
+
+```text
+O(n log n)
+```
+
+### Future Improvements
+
+* ML-based prioritization
+* Personalized ranking
+* User preference learning
+
+---
+
+## Conclusion
+
+The proposed Campus Notifications Microservice is scalable, fault-tolerant, and optimized for large student populations. It supports real-time delivery, efficient querying, queue-based processing, and priority-based notification ranking.
