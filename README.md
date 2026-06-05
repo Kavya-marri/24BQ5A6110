@@ -65,6 +65,18 @@ Contains:
 
 ---
 
+## Campus Notifications Microservice
+
+Implemented:
+
+- Stage 1 API Design
+- Stage 2 Database Design
+- Stage 3 Query Optimization
+- Stage 4 Performance Strategy
+- Stage 5 Notify All Architecture
+- Stage 6 Priority Inbox
+
+
 ## How to Run
 
 ### Vehicle Maintenance Scheduler
